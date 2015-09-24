@@ -29,7 +29,11 @@
 *.out
 *.app
 *.uvoptx
-*.Faustyna
 *.hex
-*.lst
-*.map
+*.Faustyna
+
+#Folders
+Objects/
+Listings/
+RTE/
+
