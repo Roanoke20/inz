@@ -12,6 +12,8 @@
 *.so
 *.dylib
 *.dll
+*.crf
+*.d
 
 # Fortran module files
 *.mod
@@ -26,3 +28,8 @@
 *.exe
 *.out
 *.app
+*.uvoptx
+*.Faustyna
+*.hex
+*.lst
+*.map
