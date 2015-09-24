@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2014 Nordic Semiconductor. All Rights Reserved.
+ * Copyright (c) Roanoke20 2015. All Rights Reserved.
  *
- * The information contained herein is confidential property of Nordic Semiconductor. The use,
- * copying, transfer or disclosure of such information is prohibited except by express written
- * agreement with Nordic Semiconductor.
- *
- */
-
-/** @example Board/nrf6310/s120/experimental/ble_app_multilink_central/main.c
- *
- * @brief Multilink BLE application main file.
- *
- * This file contains the source code for a sample central connecting to maximum 8 Peripherals.
  */
 
 #include <stdint.h>
@@ -34,7 +23,6 @@
 #include "ble_db_discovery.h"
 #include "lls_client.h"
 #include "app_timer.h"
-#include "nrf_delay.h"
 
 #ifdef BSP_BUTTON_1
 #define BOND_DELETE_ALL_BUTTON_PIN       BSP_BUTTON_1                                   /**< Button used for deleting all bonded centrals during startup. */
@@ -89,7 +77,7 @@ static ble_lls_c_t *p_lls_clients[MAX_PEER_COUNT];
  uint8_t alert_value=BLE_CHAR_ALERT_LEVEL_HIGH_ALERT;
 
 static app_timer_id_t m_lls_timer;
-static ble_lls_c_t *p_temporatry;
+static ble_lls_c_t *p_temporary;
 /**
  * @brief Scan parameters requested for scanning and connection.
  */
@@ -111,8 +99,8 @@ static const ble_gap_conn_params_t m_connection_param =
 {
     (uint16_t)MIN_CONN_INTERVAL,   // Minimum connection
     (uint16_t)MAX_CONN_INTERVAL,   // Maximum connection
-    0,                                   // Slave latency
-    (uint16_t)SUPERVISION_TIMEOUT        // Supervision time-out
+    0,                             // Slave latency
+    (uint16_t)SUPERVISION_TIMEOUT  // Supervision time-out
 };
 
 static void scan_start(void);
@@ -161,7 +149,6 @@ static ret_code_t device_manager_event_handler(const dm_handle_t    * p_handle,
                             p_peer_addr->addr[0], p_peer_addr->addr[1], p_peer_addr->addr[2],
                             p_peer_addr->addr[3], p_peer_addr->addr[4], p_peer_addr->addr[5]);
             APPL_LOG("\r\n");
-				//authentication !
 			
 				   m_conn_handle = p_event->event_param.p_gap_param->conn_handle;
            m_dm_device_handle = (*p_handle);
@@ -376,9 +363,11 @@ static void on_sys_evt(uint32_t sys_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
+		uint8_t i;
+	
     dm_ble_evt_handler(p_ble_evt);
 	  ble_db_discovery_on_ble_evt(&m_ble_db_discovery, p_ble_evt);	
-    ble_lls_c_on_ble_evt(m_lls_client, p_ble_evt); //rozpoznaj po p_ble_evt ktore polaczenie i taki pierwszy parametr.
+    ble_lls_c_on_ble_evt( p_lls_clients[i], p_ble_evt); //rozpoznaj po p_ble_evt ktore polaczenie i taki pierwszy parametr.
     on_ble_evt(p_ble_evt);
 }
 
@@ -485,37 +474,37 @@ static void device_manager_init(void)
 static void lls_c_evt_handler(ble_lls_c_t * p_lls_c,  ble_lls_c_evt_t * p_lls_c_evt)
 {
     uint32_t err_code;
-
+		uint8_t i;
+	
     switch (p_lls_c_evt->evt_type)
     {
         case BLE_LLS_C_EVT_DISCOVERY_COMPLETE:
 		        // Initiate bonding.
             err_code = dm_security_setup_req(&m_dm_device_handle);
             APP_ERROR_CHECK(err_code);
-
-            // Heart rate service discovered. Enable notification of Heart Rate Measurement.
-           // err_code = ble_lls_c_llm_notif_enable(p_lls_c);
-           // APP_ERROR_CHECK(err_code);
-				
-						printf("WRITE return error code= %x\r\n",
-							write_characteristic_value(p_lls_c->conn_handle,p_lls_c->llm_value_handle,sizeof(uint8_t),&alert_value));
-	
-            break;
+						break;
         case BLE_LLS_C_EVT_ALERT_SET: //set alarm to High Alarm.
-						printf("WRITE return error code= %x\r\n",
-							write_characteristic_value(p_lls_c->conn_handle,p_lls_c->llm_value_handle,sizeof(uint8_t),&alert_value));
-	
-				 	  //err_code = ble_lls_c_alert_set(p_lls_c);
+						err_code = ble_lls_c_alert_set(p_lls_c);
+            APP_ERROR_CHECK(err_code);
+						APPL_LOG("[APPL]: Alarm has been set.\r\n");			
 
-				//	APP_ERROR_CHECK(err_code);
-				   // err_code = app_timer_start(m_lls_timer,LLS_INTERVAL, NULL);
-				   // p_temporatry=p_lls_c;
-            //APP_ERROR_CHECK(err_code);
+						for(i=0; i<MAX_PEER_COUNT; i++)
+						{
+								if(p_lls_c->conn_handle == p_lls_clients[i]->conn_handle)
+								{
+										p_temporary=p_lls_clients[i];				//start timer in demo version.
+										err_code = app_timer_start(m_lls_timer,LLS_INTERVAL, NULL);
+										APP_ERROR_CHECK(err_code);
+										break;
+								}
+						}
+							APPL_LOG("[APPL]: Found! Timer is starting\r\n");
+
             break;
 				case BLE_LLS_C_EVT_ALERT_REMOVE: //set alarm to No Alarm.
 					  err_code = ble_lls_c_alert_remove(p_lls_c);
             APP_ERROR_CHECK(err_code);
-						APPL_LOG("[APPL]: Alarm has been removed.\r\n");
+						APPL_LOG("[APPL]: Alarm hh has been removed.\r\n");
 					  break;
 				case BLE_LLS_C_EVT_SERVICE_NOT_FOUND:
 					APPL_LOG("[APPL]: Link Loss Service was not found at the peer.\r\n");
@@ -540,7 +529,6 @@ void lls_c_init()
 	
     uint32_t err_code = ble_lls_c_init(p_lls_clients, MAX_PEER_COUNT, &lls_c_init_obj);
 	  APP_ERROR_CHECK(err_code);
-
 }
 
 /**@brief Function for initializing the button handler module.
@@ -611,12 +599,12 @@ This alert continues until one of following conditions occurs:
 
 		*/
 
-//static void lls_timeout_handler(void * p_context)
-//{
-	//printf("timer occurs!\r\n\r\n");
-//	ble_lls_c_disconnect( p_temporatry);
+static void lls_timeout_handler(void * p_context)
+{
+	printf("[APPL]: Alarm has been removed.\r\n");
+	ble_lls_c_alert_remove( p_temporary);
 	
-//}
+}
 
 /**
  * @brief Database discovery collector initialization.
@@ -641,12 +629,14 @@ int main(void)
 	  device_manager_init();
 	  db_discovery_init();
 		lls_c_init();
-	    // Initialize timer module, making it use the scheduler
-    //APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_MAX_TIMERS, APP_TIMER_OP_QUEUE_SIZE, false);
 
-	  //uint32_t err_code = app_timer_create(&m_lls_timer, APP_TIMER_MODE_SINGLE_SHOT, lls_timeout_handler);
-   // APP_ERROR_CHECK(err_code);
+	  // Initialize timer module, making it use the scheduler
+    APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_MAX_TIMERS, APP_TIMER_OP_QUEUE_SIZE, false);
+
+	  uint32_t err_code = app_timer_create(&m_lls_timer, APP_TIMER_MODE_SINGLE_SHOT, lls_timeout_handler);
+    APP_ERROR_CHECK(err_code);
 	
+	  printf("start\r\n");
     // Start scanning for devices.
     scan_start();
 

@@ -146,13 +146,9 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
  *                      Otherwise, an error code. This function propagates the error code returned 
  *                      by the SoftDevice API @ref sd_ble_gattc_write.
  */
-uint32_t ble_lls_c_llm_notif_enable(ble_lls_c_t * p_ble_lls_c);
-/**
- * @brief Function disconnect to device.
- */
-void ble_lls_c_disconnect(ble_lls_c_t * p_ble_lls_c);
-void ble_lls_alert_get(ble_lls_c_t * p_lls);
-uint32_t client_handling_destroy(const dm_handle_t * p_handle);
+//uint32_t ble_lls_c_llm_notif_enable(ble_lls_c_t * p_ble_lls_c);
+
+//uint32_t client_handling_destroy(const dm_handle_t * p_handle);
 	/**@brief Function for performing a Write procedure.
  *
  * @param[in]   conn_handle    Handle of the connection on which to perform the write operation.
@@ -161,11 +157,11 @@ uint32_t client_handling_destroy(const dm_handle_t * p_handle);
  * @param[in]   p_value        Data to be written.
  *
  * @return      NRF_SUCCESS on success, otherwise an error code.
- */
+ 
  uint32_t write_characteristic_value(uint16_t  conn_handle,
                                            uint16_t  write_handle,
                                            uint8_t  length,
                                            uint8_t * p_value);
-																						
+*/																						
 #endif
 
