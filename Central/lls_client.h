@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include "ble.h"
 #include "device_manager.h"
+#include "ble_hci.h"
 
 /**@brief Client states. */
 typedef enum
@@ -30,14 +31,11 @@ typedef enum
 /**@brief LLS Client event type. */
 typedef enum
 {
-    BLE_LLS_C_EVT_DISCOVERY_COMPLETE = 1,  /**< Event indicating that the Link Loss Service has been discovered at the peer. */
-    BLE_LLS_C_EVT_ALERT_SET,							 /**< Event indicating that bonding is over and alert should be set. */
-		BLE_LLS_C_EVT_ALERT_REMOVE,						 /**< Event indicating that device will disconnect in normal way. */
-		BLE_LLS_C_EVT_SERVICE_NOT_FOUND				 /**< Event indicating that the Link Loss Service has not been found at the peer. */
+   BLE_LLS_C_EVT_DISCOVERY_COMPLETE,
+	 BLE_LLS_C_EVT_LINK_LOSS_ALERT
 } ble_lls_c_evt_type_t;
 
-
-/** @brief Forward declaration of the ble_bas_t type. */
+/** @brief Forward declaration of the ble_lls_t type. */
 typedef struct ble_lls_c_s ble_lls_c_t;
 
 
@@ -52,10 +50,6 @@ typedef struct
 typedef struct
 {
     ble_lls_c_evt_type_t evt_type;  /**< Type of the event. */
-    union
-    {
-        ble_llm_t lls;  /**< Link Loss measurement received. This will be filled if the evt_type is @ref BLE_LLS_C_EVT_LLS_NOTIFICATION. */
-    } params;
 } ble_lls_c_evt_t;
 
 
@@ -73,7 +67,7 @@ struct ble_lls_c_s
     uint16_t                 lls_cccd_handle;  /**< Handle of the CCCD of the Link Loss Measurement characteristic. */
     uint16_t                 llm_value_handle; /**< Handle of the Link Loss Measurement characteristic as provided by the SoftDevice. */
     ble_lls_c_evt_handler_t  evt_handler;      /**< Application event handler to be called when there is an event related to the heart rate service. */ 
-		ble_lls_c_conn_state 	   conn_state;		   /**< Disconnecting state. */
+    uint8_t                  alert_value;
 };
 
 
@@ -137,42 +131,17 @@ uint32_t ble_lls_c_init( ble_lls_c_t ** pp_ble_lls_c, uint8_t p_ble_lls_c_size, 
 /**@brief     Function for handling BLE events from the SoftDevice.
  *
  * @details   This function will handle the BLE events received from the SoftDevice. If a BLE
- *            event is relevant to the Heart Rate Client module, then it uses it to update
+ *            event is relevant to the LInk Loss Client module, then it uses it to update
  *            interval variables and, if necessary, send events to the application.
  *
- * @param[in] p_ble_hrs_c Pointer to the heart rate client structure.
+ * @param[in] p_ble_lls_c Pointer to the Link Loss client structure.
  * @param[in] p_ble_evt   Pointer to the BLE event.
  */
 void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt);
 
-/**@brief   Function for requesting the peer to start sending notification of Heart Rate
- *          Measurement.
- *
- * @details This function will enable to notification of the Heart Rate Measurement at the peer
- *          by writing to the CCCD of the Heart Rate Measurement Characteristic.
- *
- * @param   p_ble_hrs_c Pointer to the heart rate client structure.
- *
- * @retval  NRF_SUCCESS If the SoftDevice has been requested to write to the CCCD of the peer.
- *                      Otherwise, an error code. This function propagates the error code returned 
- *                      by the SoftDevice API @ref sd_ble_gattc_write.
+/**@brief Function for freeing up a client by setting its state to idle.
  */
-//uint32_t ble_lls_c_llm_notif_enable(ble_lls_c_t * p_ble_lls_c);
-
-//uint32_t client_handling_destroy(const dm_handle_t * p_handle);
-	/**@brief Function for performing a Write procedure.
- *
- * @param[in]   conn_handle    Handle of the connection on which to perform the write operation.
- * @param[in]   write_handle   Handle of the attribute to be written.
- * @param[in]   length         Length of data to be written.
- * @param[in]   p_value        Data to be written.
- *
- * @return      NRF_SUCCESS on success, otherwise an error code.
- 
- uint32_t write_characteristic_value(uint16_t  conn_handle,
-                                           uint16_t  write_handle,
-                                           uint8_t  length,
-                                           uint8_t * p_value);
-*/																						
+ uint32_t ble_lls_c_destroy(const dm_handle_t * p_handle);
+												
 #endif
 

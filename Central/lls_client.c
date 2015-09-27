@@ -8,46 +8,6 @@
 #define TX_BUFFER_SIZE         	(TX_BUFFER_MASK + 1)  					/**< Size of send buffer, which is 1 higher than the mask. */
 #define HRM_FLAG_MASK_HR_16BIT (0x01 << 0)           /**< Bit mask used to extract the type of heart rate value. This is used to find if the received heart rate is a 16 bit value or an 8 bit value. */
 
-
-
-/**@brief Client context information. */
-typedef struct
-{
-    ble_db_discovery_t           srv_db;            /**< The DB Discovery module instance associated with this client. */
-    dm_handle_t                  handle;            /**< Device manager identifier for the device. */
-    uint8_t                      char_index;        /**< Client characteristics index in discovered service information. */
-    uint8_t                      state;             /**< Client state. */
-} client_t;
-
-
-typedef enum
-{
-    READ_REQ,  /**< Type identifying that this tx_message is a read request. */
-    WRITE_REQ  /**< Type identifying that this tx_message is a write request. */
-} tx_request_t;
-
-
-/**@brief Structure for writing a message to the peer, i.e. CCCD. */
-typedef struct
-{
-    uint8_t                  gattc_value[WRITE_MESSAGE_LENGTH];  /**< The message to write. */
-    ble_gattc_write_params_t gattc_params;                       /**< GATTC parameters for this message. */
-} write_params_t;
-
-
-/**@brief Structure for holding data to be transmitted to the connected central. */
-typedef struct
-{
-    uint16_t     conn_handle;  /**< Connection handle to be used when transmitting this message. */
-    tx_request_t type;         /**< Type of this message, i.e. read or write message. */
-    union
-    {
-        uint16_t       read_handle;  /**< Read request message. */
-        write_params_t write_req;    /**< Write request message. */
-    } req;
-} tx_message_t;
-
-
 static ble_lls_c_t ** mp_ble_lls_c;                /**< Pointer to pointer to the current instances of the LLS Client module. The memory for this provided by the application.*/
 static uint8_t max_clients;											   /**< Max clients number. */
 
@@ -94,14 +54,24 @@ static uint32_t read_characteristic_value(uint16_t conn_handle, uint16_t read_ha
 }
 
 /**
- * @brief Function disconnect to device.
+ * @brief Function for handling the Disconnect event.
+ *
+ * @param[in]   p_ble_lls_c  Link Loss Service structure.
+ * @param[in]   p_ble_evt    Event received from the BLE stack.
  */
-static void ble_lls_c_disconnect(ble_lls_c_t * p_ble_lls_c)
+static void on_disconnect(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt)
 {
-   ble_lls_c_evt_t evt;
-	p_ble_lls_c->conn_state = STATE_SERVICE_DISC;
-   evt.evt_type = BLE_LLS_C_EVT_ALERT_REMOVE;
-   p_ble_lls_c->evt_handler(p_ble_lls_c, &evt);
+    uint8_t reason = p_ble_evt->evt.gap_evt.params.disconnected.reason;
+	
+	  if (reason == BLE_HCI_CONNECTION_TIMEOUT)
+			{
+					printf("rozlaczam\r\n");
+				
+					ble_lls_c_evt_t evt;
+					evt.evt_type = BLE_LLS_C_EVT_LINK_LOSS_ALERT;
+				
+          p_ble_lls_c->evt_handler(p_ble_lls_c, &evt);
+			}
 }
 
 
@@ -171,16 +141,10 @@ static void db_discovery_evt_handler(ble_db_discovery_evt_t * p_evt)
 
         ble_lls_c_evt_t evt;
 
-        evt.evt_type = BLE_LLS_C_EVT_ALERT_SET;//BLE_LLS_C_EVT_DISCOVERY_COMPLETE;
+        evt.evt_type = BLE_LLS_C_EVT_DISCOVERY_COMPLETE;
 
         mp_ble_lls_c[lls_c_nbr]->evt_handler(mp_ble_lls_c[lls_c_nbr], &evt);
     }
-		else
-		{
-        ble_lls_c_evt_t evt;
-				evt.evt_type = BLE_LLS_C_EVT_SERVICE_NOT_FOUND;//BLE_LLS_C_EVT_DISCOVERY_COMPLETE;
-        mp_ble_lls_c[lls_c_nbr]->evt_handler(mp_ble_lls_c[lls_c_nbr], &evt);
-		}
 
 }
 
@@ -208,7 +172,7 @@ uint32_t ble_lls_c_init(ble_lls_c_t **     pp_ble_lls_c,
         mp_ble_lls_c[i]->evt_handler     = p_ble_lls_c_init->evt_handler;
         mp_ble_lls_c[i]->conn_handle     = BLE_CONN_HANDLE_INVALID;
         mp_ble_lls_c[i]->lls_cccd_handle = BLE_GATT_HANDLE_INVALID;
-			  mp_ble_lls_c[i]->conn_state      = STATE_SERVICE_DISC;
+			  mp_ble_lls_c[i]->alert_value     = BLE_CHAR_ALERT_LEVEL_NO_ALERT;
 		}
 			
     // Register with discovery module for the discovery of the service.
@@ -235,15 +199,14 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            p_ble_lls_c->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             break;
 				case BLE_GATTC_EVT_WRITE_RSP:
-					LOG("[LLS_C]: GATT client: %x %x %x %x %x. CODE is %x\r\n", *gatt_client.data, gatt_client.handle, gatt_client.len, 
+					LOG("[LLS_C]: GATT client handle is %x. Write answer: %x %x %x %x %x. CODE is %x\r\n", p_ble_lls_c->conn_handle, *gatt_client.data, gatt_client.handle, gatt_client.len, 
 																				gatt_client.offset, gatt_client.write_op, p_ble_evt->evt.gattc_evt.gatt_status);
 						break;
 				 case BLE_GAP_EVT_DISCONNECTED:
-            ble_lls_c_disconnect(p_ble_lls_c);
-					break;
+            on_disconnect(p_ble_lls_c, p_ble_evt);
+					  break;
         default:
             break;
     }
@@ -257,8 +220,9 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
         return NRF_ERROR_NULL;
     }	
 		
-		 uint8_t alert_value=BLE_CHAR_ALERT_LEVEL_HIGH_ALERT;
-
+		 uint8_t alert_value      = BLE_CHAR_ALERT_LEVEL_HIGH_ALERT;
+     p_ble_lls_c->alert_value = BLE_CHAR_ALERT_LEVEL_HIGH_ALERT;
+		
 		 return write_characteristic_value(p_ble_lls_c->conn_handle,
 														p_ble_lls_c->llm_value_handle, sizeof(uint8_t),&alert_value);	
 }
@@ -271,30 +235,10 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
         return NRF_ERROR_NULL;
     }	
 		
-		uint8_t alert_value=BLE_CHAR_ALERT_LEVEL_NO_ALERT;
-
+		uint8_t alert_value      = BLE_CHAR_ALERT_LEVEL_NO_ALERT;
+    p_ble_lls_c->alert_value = BLE_CHAR_ALERT_LEVEL_NO_ALERT;
+		
 		return write_characteristic_value(p_ble_lls_c->conn_handle, 
 													p_ble_lls_c->llm_value_handle, sizeof(uint8_t),&alert_value);
 }
 
-/**@brief Function for freeing up a client by setting its state to idle.
- uint32_t lls_client_destroy(const dm_handle_t * p_handle)
-{
-    uint32_t      err_code = NRF_SUCCESS;
-	
-	//1st rozpoznaj stan
-	
-    if (p_client->state != IDLE)
-    {
-            m_client_count--;
-            p_client->state = IDLE;
-					  if(p_handle->connection_id < LEDS_NUMBER)
-							 LEDS_OFF( 1 << leds[p_handle->connection_id] );
-    }
-    else
-    {
-        err_code = NRF_ERROR_INVALID_STATE;
-    }
-    return err_code;
-}
-*/

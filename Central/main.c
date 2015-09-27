@@ -1,8 +1,16 @@
 /*
  * Copyright (c) Roanoke20 2015. All Rights Reserved.
- * [NOTE] Application restaring after device disconnect.
+ * [NOTE] Application restaring if device disconnect, but timer is still going. It is caused by timer handler.
  */
 
+/**
+ * Recommended fast connection interval parameters for LE connection establishment are defined below:
+ * It is recommended that the Link Supervision Timeout (LSTO) is set to 6x the connection interval.
+ * The Proximity Monitor shall maintain a connection with the Proximity Reporter and monitor the RSSI of this connection. 
+ * The Proximity Monitor shall calculate the path loss by subtracting the RSSI from the transmit power level of the Proximity Reporter as discovered using
+ * the Reading Tx Power procedure. If the path loss exceeds a threshold set on the Proximity Monitor it shall write in the Alert Level characteristic of the
+ * Immediate Alert service, using the GATT Write Without Response sub-procedure, to cause the Proximity Reporter to alert.
+ */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,7 +26,6 @@
 #include "device_manager.h"
 #include "app_trace.h"
 #include "app_util.h"
-#include "ble_lls.h"
 #include "bsp.h"
 #include "ble_db_discovery.h"
 #include "lls_client.h"
@@ -46,7 +53,6 @@
 #define SLAVE_LATENCY              0                                 /**< Determines slave latency in counts of connection events. */
 #define SUPERVISION_TIMEOUT        MSEC_TO_UNITS(4000, UNIT_10_MS)   /**< Determines supervision time-out in units of 10 millisecond. */
 
-// #define TARGET_DEV_NAME                "SuperBike"                                    /**< Target device name that application is looking for. */
 #define MAX_PEER_COUNT             DEVICE_MANAGER_MAX_CONNECTIONS /**< Maximum number of peer's application intends to manage. */
 
 // TIMER
@@ -102,7 +108,8 @@ static uint32_t client_database_add_client(ble_gap_addr_t * p_client_addr,
 static void lls_timeout_handler(void * p_context)
 {
     printf("[APPL]: Alarm has been removed.\r\n");
-    ble_lls_c_alert_remove(p_temporary);
+    uint32_t err_code = ble_lls_c_alert_remove(p_temporary);
+	  APP_ERROR_CHECK(err_code);
 
 }
 
@@ -248,7 +255,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 						{
 								APPL_LOG("[APPL]: Connection Request Failed, reason %d\r\n", err_code);
 						}
-
+						printf("Connect\r\n");//here
             break;
 
         case BLE_GAP_EVT_TIMEOUT:
@@ -258,9 +265,12 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             }
             else if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_CONN)
             {
-                APPL_LOG("[APPL]: Connection Request Timedout.\r\n");
+                APPL_LOG("[APPL]: Connection Request Timeout.\r\n");
             }
             break;
+				case BLE_GAP_EVT_DISCONNECTED:
+					  
+				  	break;
 
         default:
             break;
@@ -412,6 +422,42 @@ static void device_manager_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+/**@brief Function for the Signals alert event from Immediate Alert or Link Loss services.
+ *
+ * @param[in] alert_level  Requested alert level.
+ */
+static void alert_signal(uint8_t alert_level)
+{
+    uint32_t err_code;
+	
+    switch (alert_level)
+    {
+        case BLE_CHAR_ALERT_LEVEL_NO_ALERT:
+            err_code = bsp_indication_set(BSP_INDICATE_ALERT_OFF);
+            APP_ERROR_CHECK(err_code);
+            break;
+
+        case BLE_CHAR_ALERT_LEVEL_MILD_ALERT:
+            err_code = bsp_indication_set(BSP_INDICATE_ALERT_0);
+            APP_ERROR_CHECK(err_code);
+            break;
+
+        case BLE_CHAR_ALERT_LEVEL_HIGH_ALERT:
+				//This alert continues until one of following conditions occurs:
+				//->an implementation-specific timeout
+        //->user interaction on this device
+        //->the physical link is reconnected.
+				
+            err_code = bsp_indication_set(BSP_INDICATE_ALERT_3);
+            APP_ERROR_CHECK(err_code);
+            break;
+
+        default:
+            // No implementation needed.
+            break;
+    }
+}
+
 
 /**@brief Link Loss Service Client Handler.
  */
@@ -423,13 +469,12 @@ static void lls_c_evt_handler(ble_lls_c_t * p_lls_c, ble_lls_c_evt_t * p_lls_c_e
     switch (p_lls_c_evt->evt_type)
     {
         case BLE_LLS_C_EVT_DISCOVERY_COMPLETE:
-            break;
-
-        case BLE_LLS_C_EVT_ALERT_SET: // set alarm to High Alarm.
             err_code = ble_lls_c_alert_set(p_lls_c);
             APP_ERROR_CHECK(err_code);
             APPL_LOG("[APPL]: Alarm has been set.\r\n");
-
+				
+					  //alert_signal(p_lls_c->alert_value);   //CHECK IF ALERT IS TURN ON AND TURN OFF THE ALERT!!!
+				
             for (i = 0; i < MAX_PEER_COUNT; i++)
             {
                 if (p_lls_c->conn_handle == p_lls_clients[i]->conn_handle)
@@ -441,23 +486,17 @@ static void lls_c_evt_handler(ble_lls_c_t * p_lls_c, ble_lls_c_evt_t * p_lls_c_e
                     APP_ERROR_CHECK(err_code);
                     err_code    = app_timer_start(m_lls_timer[i], LLS_INTERVAL, NULL);
                     APP_ERROR_CHECK(err_code);
+									  APPL_LOG("[APPL]: Timer is starting\r\n");
                     break;
                 }
             }
-            APPL_LOG("[APPL]: Found! Timer is starting\r\n");
-
+						
             break;
-
-        case BLE_LLS_C_EVT_ALERT_REMOVE: // set alarm to No Alarm.
-            err_code = ble_lls_c_alert_remove(p_lls_c);
-            APP_ERROR_CHECK(err_code);
-            APPL_LOG("[APPL]: Alarm hh has been removed.\r\n");
-            break;
-
-        case BLE_LLS_C_EVT_SERVICE_NOT_FOUND:
-            APPL_LOG("[APPL]: Link Loss Service was not found at the peer.\r\n");
-            break;
-
+				
+				case BLE_LLS_C_EVT_LINK_LOSS_ALERT:
+					   alert_signal(p_lls_c->alert_value);
+					   break;
+				
         default:
             break;
     }
@@ -471,7 +510,9 @@ void lls_c_init()
 {
 
     for (uint8_t i = 0; i < MAX_PEER_COUNT; i++)
+	  {
         p_lls_clients[i] = m_lls_client + i;
+		}
 
     ble_lls_c_init_t lls_c_init_obj;
     lls_c_init_obj.evt_handler = lls_c_evt_handler;
@@ -556,8 +597,9 @@ static void scan_start(void)
 
 /*
        Connection establishment.
-       1. The Proximity Reporter should use the GAP Limited Discoverable Mode when establishing an initial connection.
-       2.
+       1. The Proximity Monitor should use the GAP Limited Discovery Procedure to discover a Proximity Reporter.
+       2. The Proximity Monitor should write the Bluetooth device address of the Proximity Reporter in the Proximity Monitor controller’s white list 
+			    and set the Proximity Monitor controller’s initiator filter policy to ‘process connectable advertisement packets.’
 
  */
 
