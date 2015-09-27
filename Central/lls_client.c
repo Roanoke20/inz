@@ -9,16 +9,6 @@
 #define HRM_FLAG_MASK_HR_16BIT (0x01 << 0)           /**< Bit mask used to extract the type of heart rate value. This is used to find if the received heart rate is a 16 bit value or an 8 bit value. */
 
 
-/**@brief Client states. */
-typedef enum
-{
-    IDLE,                                           /**< Idle state. */
-    STATE_SERVICE_DISC,                             /**< Service discovery state. */
-    STATE_ALERT_SENT,//STATE_NOTIF_ENABLE,          /**< State where the request to enable notifications is sent to the peer. . */
-    STATE_RUNNING,                                  /**< Running state. */
-    STATE_ERROR                                     /**< Error state. */
-} client_state_t;
-
 
 /**@brief Client context information. */
 typedef struct
@@ -109,6 +99,7 @@ static uint32_t read_characteristic_value(uint16_t conn_handle, uint16_t read_ha
 static void ble_lls_c_disconnect(ble_lls_c_t * p_ble_lls_c)
 {
    ble_lls_c_evt_t evt;
+	p_ble_lls_c->conn_state = STATE_SERVICE_DISC;
    evt.evt_type = BLE_LLS_C_EVT_ALERT_REMOVE;
    p_ble_lls_c->evt_handler(p_ble_lls_c, &evt);
 }
@@ -214,9 +205,10 @@ uint32_t ble_lls_c_init(ble_lls_c_t **     pp_ble_lls_c,
 		
 		for(uint8_t i=0; i< max_clients; i++)
 		{
-        mp_ble_lls_c[i]->evt_handler  = p_ble_lls_c_init->evt_handler;
+        mp_ble_lls_c[i]->evt_handler     = p_ble_lls_c_init->evt_handler;
         mp_ble_lls_c[i]->conn_handle     = BLE_CONN_HANDLE_INVALID;
         mp_ble_lls_c[i]->lls_cccd_handle = BLE_GATT_HANDLE_INVALID;
+			  mp_ble_lls_c[i]->conn_state      = STATE_SERVICE_DISC;
 		}
 			
     // Register with discovery module for the discovery of the service.
@@ -285,3 +277,24 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
 													p_ble_lls_c->llm_value_handle, sizeof(uint8_t),&alert_value);
 }
 
+/**@brief Function for freeing up a client by setting its state to idle.
+ uint32_t lls_client_destroy(const dm_handle_t * p_handle)
+{
+    uint32_t      err_code = NRF_SUCCESS;
+	
+	//1st rozpoznaj stan
+	
+    if (p_client->state != IDLE)
+    {
+            m_client_count--;
+            p_client->state = IDLE;
+					  if(p_handle->connection_id < LEDS_NUMBER)
+							 LEDS_OFF( 1 << leds[p_handle->connection_id] );
+    }
+    else
+    {
+        err_code = NRF_ERROR_INVALID_STATE;
+    }
+    return err_code;
+}
+*/

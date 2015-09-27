@@ -17,6 +17,16 @@
 #include "ble.h"
 #include "device_manager.h"
 
+/**@brief Client states. */
+typedef enum
+{
+    IDLE,                                           /**< Idle state. */
+    STATE_SERVICE_DISC,                             /**< Service discovery state. */
+    STATE_ALERT_SENT,//STATE_NOTIF_ENABLE,          /**< State where the request to enable notifications is sent to the peer. . */
+    STATE_RUNNING,                                  /**< Running state. */
+    STATE_ERROR                                     /**< Error state. */
+}ble_lls_c_conn_state;
+
 /**@brief LLS Client event type. */
 typedef enum
 {
@@ -63,6 +73,7 @@ struct ble_lls_c_s
     uint16_t                 lls_cccd_handle;  /**< Handle of the CCCD of the Link Loss Measurement characteristic. */
     uint16_t                 llm_value_handle; /**< Handle of the Link Loss Measurement characteristic as provided by the SoftDevice. */
     ble_lls_c_evt_handler_t  evt_handler;      /**< Application event handler to be called when there is an event related to the heart rate service. */ 
+		ble_lls_c_conn_state 	   conn_state;		   /**< Disconnecting state. */
 };
 
 
