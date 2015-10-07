@@ -10,6 +10,8 @@
  * The Proximity Monitor shall calculate the path loss by subtracting the RSSI from the transmit power level of the Proximity Reporter as discovered using
  * the Reading Tx Power procedure. If the path loss exceeds a threshold set on the Proximity Monitor it shall write in the Alert Level characteristic of the
  * Immediate Alert service, using the GATT Write Without Response sub-procedure, to cause the Proximity Reporter to alert.
+ * 
+ * device_instance_allocate //function responsible for bonding.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -30,6 +32,7 @@
 #include "ble_db_discovery.h"
 #include "lls_client.h"
 #include "app_timer.h"
+#include "ble_advdata.h"
 
 #ifdef BSP_BUTTON_1
 #define BOND_DELETE_ALL_BUTTON_PIN BSP_BUTTON_1 /**< Button used for deleting all bonded centrals during startup. */
@@ -38,9 +41,9 @@
 #define APPL_LOG                   app_trace_log                     /**< Debug logger macro that will be used in this file to do logging of debug information over UART. */
 
 #define SEC_PARAM_BOND             1                                 /**< Perform bonding. */
-#define SEC_PARAM_MITM             0                                 /**< Man In The Middle protection not required. */
+#define SEC_PARAM_MITM             1                                 /**< Man In The Middle protection not required. */
 #define SEC_PARAM_IO_CAPABILITIES  BLE_GAP_IO_CAPS_NONE              /**< No I/O capabilities. */
-#define SEC_PARAM_OOB              0                                 /**< Out Of Band data not available. */
+#define SEC_PARAM_OOB              1                                 /**< Out Of Band data not available. */
 #define SEC_PARAM_MIN_KEY_SIZE     7                                 /**< Minimum encryption key size. */
 #define SEC_PARAM_MAX_KEY_SIZE     16                                /**< Maximum encryption key size. */
 
@@ -61,7 +64,15 @@
 #define APP_TIMER_OP_QUEUE_SIZE    4                                           /**< Size of timer operation queues. */
 #define LLS_INTERVAL               APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER) /**< LED blinking interval. */
 
-
+#define OOB_AUTH_KEY                 {                            \
+                                            {                         \
+                                              0xAA, 0xBB, 0xCC, 0xDD, \
+                                              0xEE, 0xFF, 0x99, 0x88, \
+                                              0x77, 0x66, 0x55, 0x44, \
+                                              0x33, 0x22, 0x11, 0x00  \
+                                            }                         \
+                                         }
+static ble_advdata_tk_value_t        m_oob_auth_key = OOB_AUTH_KEY;
 /**@brief Variable length data encapsulation in terms of length and pointer to data */
 typedef struct
 {
@@ -86,6 +97,8 @@ static uint8_t          m_whitelist_actual_client_nbr = 0;
 
 static ble_lls_c_t         * p_temporary;
 static ble_gap_scan_params_t m_scan_param; /**< Scan parameters requested for scanning and connection. */
+
+static dm_handle_t                  m_dm_device_handle;                  /**< Device Identifier identifier. */
 
 
 /**
@@ -160,7 +173,10 @@ static ret_code_t device_manager_event_handler(const dm_handle_t * p_handle,
             {
                 scan_start();
             }
+            APP_ERROR_CHECK(err_code);
             APPL_LOG("[APPL]:[0x%02X] << DM_EVT_CONNECTION\r\n", p_handle->connection_id);
+						//very ugly->
+						m_dm_device_handle = (*p_handle);
             break;
 
         case DM_EVT_DISCONNECTION:
@@ -171,6 +187,7 @@ static ret_code_t device_manager_event_handler(const dm_handle_t * p_handle,
                 scan_start();
             }
             m_peer_count--;
+						dm_device_delete( p_handle);
             APPL_LOG("[APPL]:[0x%02X] << DM_EVT_DISCONNECTION\r\n", p_handle->connection_id);
             break;
 
@@ -178,9 +195,10 @@ static ret_code_t device_manager_event_handler(const dm_handle_t * p_handle,
             APPL_LOG("[APPL]:[0x%02X] >> DM_EVT_SECURITY_SETUP\r\n", p_handle->connection_id);
             // Slave securtiy request received from peer, if from a non bonded device,
             // initiate security setup, else, wait for encryption to complete.
-            err_code = dm_security_setup_req((dm_handle_t *)p_handle);
-            APP_ERROR_CHECK(err_code);
-            APPL_LOG("[APPL]:[0x%02X] << DM_EVT_SECURITY_SETUP\r\n", p_handle->connection_id);
+				
+					//	err_code = dm_security_setup_req((dm_handle_t *)p_handle);
+				  //  APP_ERROR_CHECK(err_code);
+            APPL_LOG("[APPL]:[0x%02X] << DM_EVT_SECURITY_SETUP Error code is\r\n", p_handle->connection_id);
             break;
 
         case DM_EVT_SECURITY_SETUP_COMPLETE:
@@ -191,13 +209,13 @@ static ret_code_t device_manager_event_handler(const dm_handle_t * p_handle,
             break;
 
         case DM_EVT_LINK_SECURED:
-            APPL_LOG("[APPL]:[0x%02X] >> DM_LINK_SECURED_IND, result 0x%08X\r\n",
+            APPL_LOG("[APPL]:[0x%02X] >> DM_EVT_LINK_SECURED, result 0x%08X\r\n",
                      p_handle->connection_id, event_result);
-            APPL_LOG("[APPL]:[0x%02X] << DM_LINK_SECURED_IND\r\n", p_handle->connection_id);
+            APPL_LOG("[APPL]:[0x%02X] << DM_EVT_LINK_SECURED conn id\r\n", p_handle->connection_id);
             break;
 
         case DM_EVT_DEVICE_CONTEXT_LOADED:
-            APPL_LOG("[APPL]:[0x%02X] >> DM_EVT_LINK_SECURED\r\n", p_handle->connection_id);
+            APPL_LOG("[APPL]:[0x%02X] >> DM_EVT_DEVICE_CONTEXT_LOADED\r\n", p_handle->connection_id);
             APP_ERROR_CHECK(event_result);
             APPL_LOG("[APPL]:[0x%02X] << DM_EVT_DEVICE_CONTEXT_LOADED\r\n", p_handle->connection_id);
             break;
@@ -255,7 +273,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 						{
 								APPL_LOG("[APPL]: Connection Request Failed, reason %d\r\n", err_code);
 						}
-						printf("Connect\r\n");//here
+						APPL_LOG("[APPL]: BLE_GAP_EVT_ADV_REPORT. CONNECTING.\r\n");
             break;
 
         case BLE_GAP_EVT_TIMEOUT:
@@ -269,9 +287,13 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             }
             break;
 				case BLE_GAP_EVT_DISCONNECTED:
-					  
+						APPL_LOG("[APPL]:BLE_GAP_EVT_DISCONNECTED\r\n");
 				  	break;
+				case BLE_GAP_EVT_AUTH_KEY_REQUEST:
+						printf("BLE_GAP_EVT_AUTH_KEY_REQUEST\r\n\r\n");
+            err_code = sd_ble_gap_auth_key_reply(p_ble_evt->evt.gap_evt.conn_handle, BLE_GAP_AUTH_KEY_TYPE_OOB, m_oob_auth_key.tk);
 
+           
         default:
             break;
     }
@@ -311,6 +333,7 @@ static void on_sys_evt(uint32_t sys_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
+		printf("\t\tBLe event. Id is %x", p_ble_evt->header.evt_id);
     dm_ble_evt_handler(p_ble_evt);
     ble_db_discovery_on_ble_evt(&m_ble_db_discovery, p_ble_evt);
 
@@ -334,6 +357,7 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
  */
 static void sys_evt_dispatch(uint32_t sys_evt)
 {
+	printf("\t\tSystem event. Id is %x", sys_evt);
     pstorage_sys_event_handler(sys_evt);
     on_sys_evt(sys_evt);
 }
@@ -380,9 +404,8 @@ static void ble_stack_init(void)
  */
 static void device_manager_init(void)
 {
-    dm_application_param_t param;
     dm_init_param_t        init_param;
-
+    dm_application_param_t param;
     uint32_t err_code;
 
     err_code = pstorage_init();
@@ -469,7 +492,13 @@ static void lls_c_evt_handler(ble_lls_c_t * p_lls_c, ble_lls_c_evt_t * p_lls_c_e
     switch (p_lls_c_evt->evt_type)
     {
         case BLE_LLS_C_EVT_DISCOVERY_COMPLETE:
-            err_code = ble_lls_c_alert_set(p_lls_c);
+						err_code = dm_security_setup_req(&m_dm_device_handle);
+						printf("result is %x \r\n\r\n", err_code);
+            APP_ERROR_CHECK(err_code);
+						break;
+				
+				case BLE_LLS_C_EVT_LINK_LOSS_SET:
+          /*  err_code = ble_lls_c_alert_set(p_lls_c);
             APP_ERROR_CHECK(err_code);
             APPL_LOG("[APPL]: Alarm has been set.\r\n");
 				
@@ -490,11 +519,11 @@ static void lls_c_evt_handler(ble_lls_c_t * p_lls_c, ble_lls_c_evt_t * p_lls_c_e
                     break;
                 }
             }
-						
+						*/
             break;
 				
 				case BLE_LLS_C_EVT_LINK_LOSS_ALERT:
-					   alert_signal(p_lls_c->alert_value);
+					 //  alert_signal(p_lls_c->alert_value);
 					   break;
 				
         default:
@@ -658,7 +687,7 @@ static uint8_t client_get(ble_gap_addr_t * p_client_addr, uint8_t * p_client_nbr
     return NRF_ERROR_NOT_FOUND;
 }
 
-
+//dodaj usuwanie p_client z database.
 static uint32_t client_database_remove_client(ble_gap_addr_t * p_client_addr)
 {
     uint8_t client_nbr;
@@ -690,17 +719,18 @@ int main(void)
     LEDS_CONFIGURE(LEDS_MASK);
     LEDS_OFF(LEDS_MASK);
     buttons_init();
-    ble_stack_init();
+		ble_stack_init();
     device_manager_init();
     db_discovery_init();
     lls_c_init();
+
 
     // Initialize timer module, making it use the scheduler
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_MAX_TIMERS, APP_TIMER_OP_QUEUE_SIZE, false);
 
 
-    ble_gap_addr_t client_addr[2];
-    ble_gap_irk_t  client_irk;
+    ble_gap_addr_t client_addr[3];
+    ble_gap_irk_t  client_irk = OOB_AUTH_KEY;
 
     client_addr[0].addr[0] = 0x44;
     client_addr[0].addr[1] = 0x3E;
@@ -708,13 +738,8 @@ int main(void)
     client_addr[0].addr[3] = 0x81;
     client_addr[0].addr[4] = 0x40;
     client_addr[0].addr[5] = 0xCA;
-
     client_addr[0].addr_type = BLE_GAP_ADDR_TYPE_RANDOM_STATIC;
 		
-
-    for (uint8_t i = 0; i < 16; i++)
-        client_irk.irk[i] = 0;
-
     uint32_t err_code = client_database_add_client(&client_addr[0], &client_irk);
     APP_ERROR_CHECK(err_code);
 		
@@ -724,11 +749,20 @@ int main(void)
     client_addr[1].addr[3] = 0x28;
     client_addr[1].addr[4] = 0x95;
     client_addr[1].addr[5] = 0xCE;
-		
 		client_addr[1].addr_type = BLE_GAP_ADDR_TYPE_RANDOM_STATIC;
-
 		
     err_code = client_database_add_client(&client_addr[1], &client_irk);
+    APP_ERROR_CHECK(err_code);
+				
+		client_addr[2].addr[0] = 0x44;
+    client_addr[2].addr[1] = 0x3E;
+    client_addr[2].addr[2] = 0xDC;
+    client_addr[2].addr[3] = 0x81;
+    client_addr[2].addr[4] = 0x40;
+    client_addr[2].addr[5] = 0xCA;
+		client_addr[2].addr_type = BLE_GAP_ADDR_TYPE_RANDOM_STATIC;
+
+    err_code = client_database_add_client(&client_addr[2], &client_irk);
     APP_ERROR_CHECK(err_code);
 		
 		printf("Restart!\r\n\r\n");

@@ -207,6 +207,16 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
 				 case BLE_GAP_EVT_DISCONNECTED:
             on_disconnect(p_ble_lls_c, p_ble_evt);
 					  break;
+				 case BLE_GAP_EVT_CONN_SEC_UPDATE:
+				 {
+					 ble_lls_c_evt_t evt;
+           evt.evt_type = BLE_LLS_C_EVT_LINK_LOSS_SET;
+          p_ble_lls_c->evt_handler(p_ble_lls_c, &evt);
+				 }
+				 break;
+				 case BLE_GATTC_EVT_CHAR_DISC_RSP:
+					 printf("AAAAAAA\r\n\r\n");
+				 break;
         default:
             break;
     }

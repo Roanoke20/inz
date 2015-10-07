@@ -170,12 +170,12 @@
             <UseExternalTool>0</UseExternalTool>
             <RunIndependent>0</RunIndependent>
             <UpdateFlashBeforeDebugging>1</UpdateFlashBeforeDebugging>
-            <Capability>0</Capability>
-            <DriverSelection>-1</DriverSelection>
+            <Capability>1</Capability>
+            <DriverSelection>4096</DriverSelection>
           </Flash1>
           <bUseTDR>1</bUseTDR>
           <Flash2>BIN\UL2CM3.DLL</Flash2>
-          <Flash3></Flash3>
+          <Flash3>"" ()</Flash3>
           <Flash4></Flash4>
           <pFcarmOut></pFcarmOut>
           <pFcarmGrp></pFcarmGrp>
@@ -363,7 +363,7 @@
             <useXO>0</useXO>
             <VariousControls>
               <MiscControls>--c99</MiscControls>
-              <Define>__HEAP_SIZE=0 BLE_STACK_SUPPORT_REQD S130 BOARD_PCA10028 NRF51 SOFTDEVICE_PRESENT SWI_DISABLE0 ENABLE_DEBUG_LOG_SUPPORT DM_DISABLE_LOGS</Define>
+              <Define>__HEAP_SIZE=0 BLE_STACK_SUPPORT_REQD S130 BOARD_PCA10028 NRF51 SOFTDEVICE_PRESENT SWI_DISABLE0 ENABLE_DEBUG_LOG_SUPPORT</Define>
               <Undefine></Undefine>
               <IncludePath>.\config</IncludePath>
             </VariousControls>
@@ -503,12 +503,6 @@
         </targetInfos>
       </component>
       <component Cclass="nRF_BLE" Cgroup="BLE_Modules" Csub="device_manager" Cvariant="Central" Cvendor="NordicSemiconductor" Cversion="3.0.0" condition="device_manager_Central">
-        <package name="nRF_BLE" schemaVersion="1.2" supportContact="http://www.nordicsemi.com/About-us/Contact-us" url="http://developer.nordicsemi.com/nRF51_SDK/pieces/nRF_BLE/" vendor="NordicSemiconductor" version="3.0.0"/>
-        <targetInfos>
-          <targetInfo name="superBike"/>
-        </targetInfos>
-      </component>
-      <component Cclass="nRF_BLE" Cgroup="BLE_Services" Csub="ble_lls" Cvendor="NordicSemiconductor" Cversion="3.0.0" condition="ble_lls">
         <package name="nRF_BLE" schemaVersion="1.2" supportContact="http://www.nordicsemi.com/About-us/Contact-us" url="http://developer.nordicsemi.com/nRF51_SDK/pieces/nRF_BLE/" vendor="NordicSemiconductor" version="3.0.0"/>
         <targetInfos>
           <targetInfo name="superBike"/>
