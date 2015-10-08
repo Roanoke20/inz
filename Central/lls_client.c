@@ -6,11 +6,9 @@
 #define MAX_CLIENTS  						DEVICE_MANAGER_MAX_CONNECTIONS  /**< Max number of clients. */
 #define TX_BUFFER_MASK         	0x07                  					/**< TX Buffer mask, must be a mask of continuous zeroes, followed by continuous sequence of ones: 000...111. */
 #define TX_BUFFER_SIZE         	(TX_BUFFER_MASK + 1)  					/**< Size of send buffer, which is 1 higher than the mask. */
-#define HRM_FLAG_MASK_HR_16BIT (0x01 << 0)           /**< Bit mask used to extract the type of heart rate value. This is used to find if the received heart rate is a 16 bit value or an 8 bit value. */
 
-static ble_lls_c_t ** mp_ble_lls_c;                /**< Pointer to pointer to the current instances of the LLS Client module. The memory for this provided by the application.*/
-static uint8_t max_clients;											   /**< Max clients number. */
-
+static ble_lls_c_t ** mp_ble_lls_c;                             /**< Pointer to pointer to the current instances of the LLS Client module. The memory for this provided by the application.*/
+static uint8_t max_clients;											                /**< Max clients number. */
 
 /**
  * @brief Function for performing a Read procedure.
@@ -65,15 +63,11 @@ static void on_disconnect(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
 	
 	  if (reason == BLE_HCI_CONNECTION_TIMEOUT)
 			{
-					printf("rozlaczam\r\n");
-				
 					ble_lls_c_evt_t evt;
-					evt.evt_type = BLE_LLS_C_EVT_LINK_LOSS_ALERT;
-				
+					evt.evt_type = BLE_LLS_C_EVT_LINK_LOSS_DEVICE_DISCONNECT;
           p_ble_lls_c->evt_handler(p_ble_lls_c, &evt);
 			}
 }
-
 
 /**@brief     Function for handling events from the database discovery module.
  *
@@ -88,7 +82,7 @@ static void on_disconnect(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
  */
 static void db_discovery_evt_handler(ble_db_discovery_evt_t * p_evt)
 {  
-     uint8_t lls_c_nbr = 0;   // Actual client number.
+     uint8_t lls_c_nbr;   // Actual client number.
 
 		// Check if the Link Loss Service was discovered.
     if (p_evt->evt_type == BLE_DB_DISCOVERY_COMPLETE &&
@@ -126,7 +120,6 @@ static void db_discovery_evt_handler(ble_db_discovery_evt_t * p_evt)
                     p_evt->params.discovered_db.charateristics[i].cccd_handle;
 										mp_ble_lls_c[lls_c_nbr]->llm_value_handle      =
                     p_evt->params.discovered_db.charateristics[i].characteristic.handle_value;
-									//	lls_c_nbr++;
 								}
 								else //Size of table is exceeded. It should not occur. 
 								{
@@ -187,9 +180,9 @@ uint32_t ble_lls_c_init(ble_lls_c_t **     pp_ble_lls_c,
 
 void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt)
 {
-	printf("event id is %x\r\n", p_ble_evt->header.evt_id);
+	//printf("event id is %x\r\n", p_ble_evt->header.evt_id);
 
-	ble_gattc_evt_write_rsp_t gatt_client = p_ble_evt->evt.gattc_evt.params.write_rsp;
+	ble_gattc_evt_write_rsp_t gatt_client;
 	
     if ((p_ble_lls_c == NULL) || (p_ble_evt == NULL))
     {
@@ -198,25 +191,19 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
 
     switch (p_ble_evt->header.evt_id)
     {
-        case BLE_GAP_EVT_CONNECTED:
-            break;
-				case BLE_GATTC_EVT_WRITE_RSP:
-					LOG("[LLS_C]: GATT client handle is %x. Write answer: %x %x %x %x %x. CODE is %x\r\n", p_ble_lls_c->conn_handle, *gatt_client.data, gatt_client.handle, gatt_client.len, 
-																				gatt_client.offset, gatt_client.write_op, p_ble_evt->evt.gattc_evt.gatt_status);
-						break;
+        //case BLE_GAP_EVT_AUTH_STATUS: //We are connected. What's more-it is secury connection!
+					//  on_connect(p_ble_lls_c);
+          //  break;
 				 case BLE_GAP_EVT_DISCONNECTED:
             on_disconnect(p_ble_lls_c, p_ble_evt);
 					  break;
-				 case BLE_GAP_EVT_CONN_SEC_UPDATE:
-				 {
-					 ble_lls_c_evt_t evt;
-           evt.evt_type = BLE_LLS_C_EVT_LINK_LOSS_SET;
-          p_ble_lls_c->evt_handler(p_ble_lls_c, &evt);
-				 }
-				 break;
-				 case BLE_GATTC_EVT_CHAR_DISC_RSP:
-					 printf("AAAAAAA\r\n\r\n");
-				 break;
+				 case BLE_GATTC_EVT_WRITE_RSP:  //only for debuging.
+#ifdef LLS_C_DEBUG
+					gatt_client = p_ble_evt->evt.gattc_evt.params.write_rsp;
+					LOG("[LLS_C]: GATT client handle is %x. Write answer: %x %x %x %x %x. CODE is %x\r\n", p_ble_lls_c->conn_handle, *gatt_client.data, gatt_client.handle, gatt_client.len, 
+																				gatt_client.offset, gatt_client.write_op, p_ble_evt->evt.gattc_evt.gatt_status);
+#endif
+						break;
         default:
             break;
     }
@@ -232,6 +219,7 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
 		
 		 uint8_t alert_value      = BLE_CHAR_ALERT_LEVEL_HIGH_ALERT;
      p_ble_lls_c->alert_value = BLE_CHAR_ALERT_LEVEL_HIGH_ALERT;
+		 LOG("[LLS_C]: Alarm has been set.\r\n");
 		
 		 return write_characteristic_value(p_ble_lls_c->conn_handle,
 														p_ble_lls_c->llm_value_handle, sizeof(uint8_t),&alert_value);	
@@ -247,6 +235,7 @@ void ble_lls_c_on_ble_evt(ble_lls_c_t * p_ble_lls_c, const ble_evt_t * p_ble_evt
 		
 		uint8_t alert_value      = BLE_CHAR_ALERT_LEVEL_NO_ALERT;
     p_ble_lls_c->alert_value = BLE_CHAR_ALERT_LEVEL_NO_ALERT;
+    LOG("[LLS_C]: Alarm has been removed.\r\n");
 		
 		return write_characteristic_value(p_ble_lls_c->conn_handle, 
 													p_ble_lls_c->llm_value_handle, sizeof(uint8_t),&alert_value);

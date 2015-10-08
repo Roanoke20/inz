@@ -32,8 +32,7 @@ typedef enum
 typedef enum
 {
    BLE_LLS_C_EVT_DISCOVERY_COMPLETE,
-	 BLE_LLS_C_EVT_LINK_LOSS_ALERT,
-	 BLE_LLS_C_EVT_LINK_LOSS_SET
+	 BLE_LLS_C_EVT_LINK_LOSS_DEVICE_DISCONNECT
 } ble_lls_c_evt_type_t;
 
 /** @brief Forward declaration of the ble_lls_t type. */
